@@ -1,4 +1,11 @@
+import 'dart:convert';
+import 'dart:io';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'response.dart';
+import 'dart:developer';
+
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
 void main() {
   runApp(const MyApp());
@@ -48,55 +55,134 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  String iksm_session = "ee930b7a558ae565c06ac3b2c7184b1bbb6f3087";
+  String? iksm_session;
+  int? resultId;
 
-  void _update() {
+  void saveData(int resultId, String iksm_session) async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+
+    prefs.setInt('resultId', resultId);
+    prefs.setString('iksm_session', iksm_session);
+
     setState(() {
-      iksm_session = "ee930b7a558ae565c06ac3b2c7184b1bbb6f3087";
+      this.iksm_session = prefs.getString('iksm_session');
+      this.resultId = prefs.getInt('resultId');
     });
+  }
+
+  void loadData() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    setState(() {
+      this.iksm_session = prefs.getString('iksm_session');
+      this.resultId = prefs.getInt('resultId');
+    });
+  }
+
+  Results parseResults(String responseBody) {
+    final parsed = jsonDecode(responseBody).cast<Map<String, dynamic>>();
+    // final parsed = json.decode(responseBody).cast<Map<String, dynamic>>();
+    return Results.fromJson(parsed);
+  }
+
+  Future<http.Response> _fetch(int resultId) async {
+    http.Client client = http.Client();
+    String iksm_session = "ee930b7a558ae565c06ac3b2c7184b1bbb6f3087";
+    Map<String, String> headers = {
+      "cookie": "iksm_session=$iksm_session",
+    };
+    Uri url = Uri.parse(
+        "https://app.splatoon2.nintendo.net/api/coop_results/${resultId}");
+    return client.get(url, headers: headers);
+  }
+
+  Future<http.Response> _post(String result) {
+    http.Client client = http.Client();
+    Uri url = Uri.parse("http://localhost:3000/v1/results");
+    Map<String, List<Object>> parameters = {
+      "results": [json.decode(result)],
+    };
+    return client.post(url,
+        headers: {"content-type": "application/json"},
+        body: json.encode(parameters));
+  }
+
+  Future<Results> _summary() async {
+    http.Client client = http.Client();
+    String iksm_session = "ee930b7a558ae565c06ac3b2c7184b1bbb6f3087";
+    Map<String, String> headers = {
+      "cookie": "iksm_session=$iksm_session",
+    };
+    Uri url = Uri.parse("https://app.splatoon2.nintendo.net/api/coop_results");
+    final response = await client.get(url, headers: headers);
+    return parseResults(response.body);
+  }
+
+  void _request() async {
+    if (iksm_session == null) {
+      throw Exception("iksm_session is null");
+    }
+
+    if (resultId == null) {
+      throw Exception("result_id is null");
+    }
+
+    _summary()
+        .then((value) => inspect(value))
+        .catchError((error) => debugPrint(error.toString()));
+    //  _fetch(resultId!)
+    //     .then((result) => _post(result.body))
+    //     .then((response) => debugPrint(response.body))
+    //     .catchError((error) {
+    //   debugPrint(error.toString());
+    // });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    loadData();
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
     return Scaffold(
       appBar: AppBar(
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
         title: Text(widget.title),
       ),
       body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
         child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Invoke "debug painting" (press "p" in the console, choose the
-          // "Toggle Debug Paint" action from the Flutter Inspector in Android
-          // Studio, or the "Toggle Debug Paint" command in Visual Studio Code)
-          // to see the wireframe for each widget.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
-            Text("Your iksm Session is ${iksm_session}")
+            TextField(
+                onSubmitted: (String value) async {
+                  saveData(0, value);
+                },
+                obscureText: true,
+                decoration: InputDecoration(
+                    border: OutlineInputBorder(), labelText: "session_token")),
+            TextField(
+                onSubmitted: (String value) async {
+                  saveData(0, value);
+                },
+                obscureText: true,
+                decoration: InputDecoration(
+                    border: OutlineInputBorder(), labelText: "result_id")),
+            TextField(
+                onSubmitted: (String value) async {
+                  saveData(0, value);
+                },
+                obscureText: true,
+                decoration: InputDecoration(
+                    border: OutlineInputBorder(), labelText: "iksm_session")),
+            Text(
+                "Your iksm Session is ${iksm_session == null ? "unset" : "set"}"),
+            Text("Your resultId is ${resultId ?? 0}"),
           ],
         ),
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: _update,
-        tooltip: 'Update',
+        onPressed: _request,
+        tooltip: 'Request',
         child: const Icon(Icons.autorenew_sharp),
       ), // This trailing comma makes auto-formatting nicer for build methods.
     );

@@ -1,0 +1,14 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "flutter_mobile",
+      "program": "lib/main.dart",
+      "request": "launch",
+      "type": "dart",
+      "args": [
+        "--dart-define=API_TOKEN=ee930b7a558ae565c06ac3b2c7184b1bbb6f3087"
+      ]
+    }
+  ]
+}
