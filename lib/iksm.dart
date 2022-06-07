@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 
 class SessionToken {
   final String sessionToken;
@@ -139,6 +138,37 @@ class SplatoonAccessToken {
         status: json["status"],
         result: WebApiServerCredential.fromJson(json["result"]),
         correlationId: json["correlationId"]);
+  }
+}
+
+class ErrorNSO {
+  final String errorDescription;
+  final String error;
+
+  const ErrorNSO({required this.errorDescription, required this.error});
+
+  factory ErrorNSO.fromJson(Map<String, dynamic> json) {
+    return ErrorNSO(
+        errorDescription: json["error_description"], error: json["error"]);
+  }
+}
+
+class ErrorAPP {
+  final int status;
+  final String correlationId;
+  final String errorMessage;
+
+  const ErrorAPP({
+    required this.status,
+    required this.correlationId,
+    required this.errorMessage,
+  });
+
+  factory ErrorAPP.fromJson(Map<String, dynamic> json) {
+    return ErrorAPP(
+        status: json["status"],
+        correlationId: json["correlationId"],
+        errorMessage: json["errorMessage"]);
   }
 }
 
@@ -345,17 +375,6 @@ Future<String?> getCookie(String urlScheme) async {
       .catchError((error) {
     debugPrint(error.toString());
     return;
-  });
-
-  /// 環境変数ぽいやつ
-  SharedPreferences prefs = await SharedPreferences.getInstance();
-
-  prefs.setInt('resultId', resultId);
-  prefs.setString('iksm_session', iksmSession);
-
-  setState(() {
-    this.iksmSession = prefs.getString('iksm_session');
-    this.resultId = prefs.getInt('resultId');
   });
 
   return _getAccessToken((await sessionToken))
