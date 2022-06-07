@@ -1,8 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher_string.dart';
 import 'response.dart';
 import 'dart:developer';
+import 'iksm.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -55,40 +58,20 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  String? iksm_session;
+  String? iksmSession;
+  String? sessionTokenCode;
   int? resultId;
 
-  void saveData(int resultId, String iksm_session) async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-
-    prefs.setInt('resultId', resultId);
-    prefs.setString('iksm_session', iksm_session);
-
-    setState(() {
-      this.iksm_session = prefs.getString('iksm_session');
-      this.resultId = prefs.getInt('resultId');
-    });
-  }
-
-  void loadData() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    setState(() {
-      this.iksm_session = prefs.getString('iksm_session');
-      this.resultId = prefs.getInt('resultId');
-    });
-  }
-
-  Results parseResults(String responseBody) {
-    final parsed = jsonDecode(responseBody).cast<Map<String, dynamic>>();
-    // final parsed = json.decode(responseBody).cast<Map<String, dynamic>>();
+  Results parseResults(String response) {
+    final parsed = json.decode(response);
     return Results.fromJson(parsed);
   }
 
   Future<http.Response> _fetch(int resultId) async {
     http.Client client = http.Client();
-    String iksm_session = "ee930b7a558ae565c06ac3b2c7184b1bbb6f3087";
+    String iksmSession = "ee930b7a558ae565c06ac3b2c7184b1bbb6f3087";
     Map<String, String> headers = {
-      "cookie": "iksm_session=$iksm_session",
+      "cookie": "iksm_session=$iksmSession",
     };
     Uri url = Uri.parse(
         "https://app.splatoon2.nintendo.net/api/coop_results/${resultId}");
@@ -97,7 +80,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
   Future<http.Response> _post(String result) {
     http.Client client = http.Client();
-    Uri url = Uri.parse("http://localhost:3000/v1/results");
+    Uri url = Uri.parse("https://api-dev.splatnet2.com/v1/results");
     Map<String, List<Object>> parameters = {
       "results": [json.decode(result)],
     };
@@ -106,19 +89,25 @@ class _MyHomePageState extends State<MyHomePage> {
         body: json.encode(parameters));
   }
 
-  Future<Results> _summary() async {
+  Future<int> _summary() async {
     http.Client client = http.Client();
-    String iksm_session = "ee930b7a558ae565c06ac3b2c7184b1bbb6f3087";
+    String iksmSession = "ee930b7a558ae565c06ac3b2c7184b1bbb6f3087";
     Map<String, String> headers = {
-      "cookie": "iksm_session=$iksm_session",
+      "cookie": "iksm_session=$iksmSession",
     };
     Uri url = Uri.parse("https://app.splatoon2.nintendo.net/api/coop_results");
-    final response = await client.get(url, headers: headers);
-    return parseResults(response.body);
+    final response =
+        parseResults((await client.get(url, headers: headers)).body);
+    final resultId = response.summary.card.jobNum;
+    // リザルトIDの更新
+    setState(() {
+      this.resultId = resultId;
+    });
+    return resultId;
   }
 
   void _request() async {
-    if (iksm_session == null) {
+    if (iksmSession == null) {
       throw Exception("iksm_session is null");
     }
 
@@ -127,14 +116,30 @@ class _MyHomePageState extends State<MyHomePage> {
     }
 
     _summary()
-        .then((value) => inspect(value))
+        .then((value) => _fetch(value))
+        .then((value) => _post(value.body))
+        .then((value) => debugPrint(value.body))
         .catchError((error) => debugPrint(error.toString()));
-    //  _fetch(resultId!)
-    //     .then((result) => _post(result.body))
-    //     .then((response) => debugPrint(response.body))
-    //     .catchError((error) {
-    //   debugPrint(error.toString());
-    // });
+  }
+
+  void saveData(int resultId, String iksmSession) async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+
+    prefs.setInt('resultId', resultId);
+    prefs.setString('iksm_session', iksmSession);
+
+    setState(() {
+      this.iksmSession = prefs.getString('iksm_session');
+      this.resultId = prefs.getInt('resultId');
+    });
+  }
+
+  void loadData() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    setState(() {
+      this.iksmSession = prefs.getString('iksm_session');
+      this.resultId = prefs.getInt('resultId');
+    });
   }
 
   @override
@@ -155,36 +160,33 @@ class _MyHomePageState extends State<MyHomePage> {
           children: <Widget>[
             TextField(
                 onSubmitted: (String value) async {
-                  saveData(0, value);
+                  getCookie(value);
                 },
                 obscureText: true,
                 decoration: InputDecoration(
-                    border: OutlineInputBorder(), labelText: "session_token")),
-            TextField(
-                onSubmitted: (String value) async {
-                  saveData(0, value);
-                },
-                obscureText: true,
-                decoration: InputDecoration(
-                    border: OutlineInputBorder(), labelText: "result_id")),
-            TextField(
-                onSubmitted: (String value) async {
-                  saveData(0, value);
-                },
-                obscureText: true,
-                decoration: InputDecoration(
-                    border: OutlineInputBorder(), labelText: "iksm_session")),
+                    border: OutlineInputBorder(),
+                    labelText: "session_token_code")),
             Text(
-                "Your iksm Session is ${iksm_session == null ? "unset" : "set"}"),
+                "Your iksm Session is ${iksmSession == null ? "unset" : "set"}"),
             Text("Your resultId is ${resultId ?? 0}"),
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _request,
-        tooltip: 'Request',
-        child: const Icon(Icons.autorenew_sharp),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
+      floatingActionButton: Column(mainAxisSize: MainAxisSize.min, children: [
+        FloatingActionButton(
+          onPressed: () async {
+            final Uri oauthUri = getOAuthUri();
+            await launchUrl(oauthUri);
+          },
+          tooltip: 'Cookie',
+          child: const Icon(Icons.open_in_browser),
+        ),
+        FloatingActionButton(
+          onPressed: _request,
+          tooltip: 'Request',
+          child: const Icon(Icons.autorenew_sharp),
+        ),
+      ]), // This trailing comma makes auto-formatting nicer for build methods.
     );
   }
 }

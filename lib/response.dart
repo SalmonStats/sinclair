@@ -23,28 +23,28 @@ class Summary {
 }
 
 class Card {
-  final int goldenIkuraNum;
-  final int ikuraNum;
+  final int goldenIkuraTotal;
+  final int ikuraTotal;
   final int helpTotal;
-  final int deadTotal;
+  final int jobNum;
   final int kumaPoint;
   final int kumaPointTotal;
 
   const Card({
-    required this.goldenIkuraNum,
-    required this.ikuraNum,
+    required this.goldenIkuraTotal,
+    required this.ikuraTotal,
     required this.helpTotal,
-    required this.deadTotal,
+    required this.jobNum,
     required this.kumaPoint,
     required this.kumaPointTotal,
   });
 
   factory Card.fromJson(Map<String, dynamic> json) {
     return Card(
-      goldenIkuraNum: json['golden_ikura_num'] as int,
-      ikuraNum: json['ikura_num'] as int,
+      goldenIkuraTotal: json['golden_ikura_total'] as int,
+      ikuraTotal: json['ikura_total'] as int,
       helpTotal: json['help_total'] as int,
-      deadTotal: json['dead_total'] as int,
+      jobNum: json["job_num"] as int,
       kumaPoint: json['kuma_point'] as int,
       kumaPointTotal: json['kuma_point_total'] as int,
     );
