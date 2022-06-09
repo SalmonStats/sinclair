@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:developer';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -123,6 +124,25 @@ class SplatoonToken {
   }
 }
 
+class Version {
+  final String version;
+  final String currentVersionReleaseDate;
+  final String minimumOsVersion;
+
+  const Version(
+      {required this.version,
+      required this.currentVersionReleaseDate,
+      required this.minimumOsVersion});
+
+  factory Version.fromJson(Map<String, dynamic> json) {
+    return Version(
+        version: json["results"][0]["version"],
+        currentVersionReleaseDate: json["results"][0]
+            ["currentVersionReleaseDate"],
+        minimumOsVersion: json["results"][0]["minimumOsVersion"]);
+  }
+}
+
 class SplatoonAccessToken {
   final int status;
   final WebApiServerCredential result;
@@ -172,6 +192,14 @@ class ErrorAPP {
   }
 }
 
+Future<Version> _getVersion() async {
+  http.Client client = http.Client();
+  Uri url = Uri.parse("https://itunes.apple.com/lookup?id=1234806557");
+
+  final http.Response response = (await client.get(url));
+  return Version.fromJson(json.decode(response.body));
+}
+
 Future<SessionToken> _getSessionToken(String sessionTokenCode) async {
   http.Client client = http.Client();
   const String verifier = "OwaTAOolhambwvY3RXSD-efxqdBEVNnQkc0bBJ7zaak";
@@ -185,14 +213,14 @@ Future<SessionToken> _getSessionToken(String sessionTokenCode) async {
   final http.Response response = (await client.post(url, body: parameters));
 
   if (response.statusCode != 200) {
-    throw HttpException("${response.body}");
+    final error = ErrorNSO.fromJson(json.decode(response.body));
+    throw HttpException("${response.statusCode}: ${error.errorDescription}");
   }
-  debugPrint(response.statusCode.toString());
+
   return SessionToken.fromJson(json.decode(response.body));
 }
 
-Future<AccessToken> _getAccessToken(SessionToken token) async {
-  final String sessionToken = token.sessionToken;
+Future<AccessToken> _getAccessToken(String sessionToken) async {
   http.Client client = http.Client();
   Map<String, String> parameters = {
     "client_id": "71b963c1b7b6d119",
@@ -200,9 +228,14 @@ Future<AccessToken> _getAccessToken(SessionToken token) async {
     "session_token": sessionToken,
   };
   Uri url = Uri.parse("https://accounts.nintendo.com/connect/1.0.0/api/token");
-  final String response = (await client.post(url, body: parameters)).body;
-  debugPrint(response);
-  return AccessToken.fromJson(json.decode(response));
+  final http.Response response = (await client.post(url, body: parameters));
+
+  if (response.statusCode != 200) {
+    final error = ErrorNSO.fromJson(json.decode(response.body));
+    throw HttpException("${response.statusCode}: ${error.errorDescription}");
+  }
+
+  return AccessToken.fromJson(json.decode(response.body));
 }
 
 Future<Hash> _getHash(String accessToken, int timestamp) async {
@@ -212,9 +245,13 @@ Future<Hash> _getHash(String accessToken, int timestamp) async {
     "timestamp": "$timestamp",
   };
   Uri url = Uri.parse("https://s2s-hash-server.herokuapp.com/hash");
-  final String response = (await client.post(url, body: parameters)).body;
-  debugPrint(response);
-  return Hash.fromJson(json.decode(response));
+  final http.Response response = (await client.post(url, body: parameters));
+
+  if (response.statusCode != 200) {
+    throw HttpException("${response.statusCode}: Internal Server Error");
+  }
+
+  return Hash.fromJson(json.decode(response.body));
 }
 
 enum FlapgType { NSO, APP }
@@ -242,9 +279,22 @@ Future<Flapg> _getFlapgToken(
     "x-iid": type.rawValue,
   };
   Uri url = Uri.parse("https://flapg.com/ika2/api/login");
-  final String response = (await client.get(url, headers: headers)).body;
-  debugPrint(response);
-  return Flapg.fromJson(json.decode(response));
+  final http.Response response = (await client.get(url, headers: headers));
+
+  if (response.statusCode != 200) {
+    switch (response.statusCode) {
+      case 400:
+        throw HttpException("${response.statusCode}: Bad Request.");
+      case 404:
+        throw HttpException("${response.statusCode}: Not Found.");
+      case 427:
+        throw HttpException("${response.statusCode}: Upgrade Required.");
+      default:
+        throw HttpException("${response.statusCode}: Internal Server Error.");
+    }
+  }
+
+  return Flapg.fromJson(json.decode(response.body));
 }
 
 Future<SplatoonToken> _getSplatoonToken(Flapg result, String version) async {
@@ -266,15 +316,18 @@ Future<SplatoonToken> _getSplatoonToken(Flapg result, String version) async {
       "language": "ja-JP",
     }
   };
+  final String body = json.encode(parameters);
 
   Uri url = Uri.parse("https://api-lp1.znc.srv.nintendo.net/v3/Account/Login");
-  debugPrint(headers.toString());
-  debugPrint(json.encode(parameters).toString());
-  final String response =
-      (await client.post(url, headers: headers, body: json.encode(parameters)))
-          .body;
-  debugPrint(response);
-  return SplatoonToken.fromJson(json.decode(response));
+
+  final http.Response response =
+      (await client.post(url, headers: headers, body: body));
+  try {
+    return SplatoonToken.fromJson(json.decode(response.body));
+  } catch (e) {
+    final error = ErrorAPP.fromJson(json.decode(response.body));
+    throw HttpException("${error.status}: ${error.errorMessage}");
+  }
 }
 
 Future<SplatoonToken> _getSplatoonTokenValue(
@@ -319,11 +372,15 @@ Future<SplatoonAccessToken> _getSplatoonAccessToken(
 
   Uri url = Uri.parse(
       "https://api-lp1.znc.srv.nintendo.net/v2/Game/GetWebServiceToken");
-  final String response =
-      (await client.post(url, headers: headers, body: json.encode(parameters)))
-          .body;
-  debugPrint(response);
-  return SplatoonAccessToken.fromJson(json.decode(response));
+  final http.Response response =
+      await client.post(url, headers: headers, body: json.encode(parameters));
+
+  try {
+    return SplatoonAccessToken.fromJson(json.decode(response.body));
+  } catch (e) {
+    final error = ErrorAPP.fromJson(json.decode(response.body));
+    throw HttpException("${error.status}: ${error.errorMessage}");
+  }
 }
 
 Future<String> _getIksmSession(SplatoonAccessToken token) async {
@@ -340,14 +397,14 @@ Future<String> _getIksmSession(SplatoonAccessToken token) async {
       (await client.get(url, headers: headers)).headers["set-cookie"];
 
   if (cookies == null) {
-    throw HttpException("AAA");
+    throw const HttpException("403: Forbidden.");
   }
 
   final String? iksmSession =
-      new RegExp(r"iksm_session=([0-9a-f]{40})").firstMatch(cookies)?.group(1);
+      RegExp(r"iksm_session=([0-9a-f]{40})").firstMatch(cookies)?.group(1);
 
   if (iksmSession == null) {
-    throw HttpException("AAA");
+    throw const HttpException("403: Forbidden.");
   }
 
   return iksmSession;
@@ -356,36 +413,44 @@ Future<String> _getIksmSession(SplatoonAccessToken token) async {
 class UserInfo {
   String sessionToken;
   String iksmSession;
+  String currentVersionReleaseDate;
+  String version;
 
-  UserInfo(this.sessionToken, this.iksmSession) {}
+  UserInfo(
+      {required this.sessionToken,
+      required this.iksmSession,
+      required this.currentVersionReleaseDate,
+      required this.version});
 }
 
-Future<String?> getCookie(String urlScheme) async {
-  const String version = "2.1.1";
+Future<UserInfo> renewCookie(String sessionToken) async {
+  final Version product = await _getVersion();
+  return _getAccessToken(sessionToken)
+      .then(
+          (accessToken) => _getSplatoonTokenValue(accessToken, product.version))
+      .then((splatoonToken) =>
+          _getSplatoonAccessTokenValue(splatoonToken, product.version))
+      .then((splatoonAccessToken) => _getIksmSession(splatoonAccessToken))
+      .then((iksmSession) => UserInfo(
+          sessionToken: sessionToken,
+          iksmSession: iksmSession,
+          currentVersionReleaseDate: product.currentVersionReleaseDate,
+          version: product.version))
+      .catchError((error) {
+    throw error;
+  });
+}
+
+Future<UserInfo> getCookie(String urlScheme) async {
   final String? sessionTokenCode =
       new RegExp(r"de=(.*)&").firstMatch(urlScheme)?.group(1);
 
   if (sessionTokenCode == null) {
-    return null;
+    throw const HttpException("404: Session Token Code is Not Found.");
   }
 
-  debugPrint(sessionTokenCode);
-  final Future<SessionToken> sessionToken = _getSessionToken(sessionTokenCode)
-      .then((value) => value)
-      .catchError((error) {
-    debugPrint(error.toString());
-    return;
-  });
-
-  return _getAccessToken((await sessionToken))
-      .then((value) => _getSplatoonTokenValue(value, version))
-      .then((value) => _getSplatoonAccessTokenValue(value, version))
-      .then((value) async {
-    final String? iksmSession = (await _getIksmSession(value));
-  }).catchError((error) {
-    debugPrint(error.toString());
-    return null;
-  });
+  final SessionToken sessionToken = await _getSessionToken(sessionTokenCode);
+  return renewCookie(sessionToken.sessionToken);
 }
 
 Uri getOAuthUri() {
