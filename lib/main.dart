@@ -54,10 +54,83 @@ class _TabViewState extends State<TabView> {
           ),
           title: const Text('Sinclair'),
         ),
-        body: const TabBarView(
+        body: TabBarView(
           children: [
-            Center(child: Text("Page 1")),
-            Center(child: Text("Page 2")),
+            HomeView(),
+            SettingView(),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class HomeView extends StatefulWidget {
+  @override
+  _HomeViewState createState() => _HomeViewState();
+}
+
+class _HomeViewState extends State<HomeView> {
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(body: Center());
+  }
+}
+
+class SettingView extends StatefulWidget {
+  @override
+  _SettingViewState createState() => _SettingViewState();
+}
+
+class _SettingViewState extends State<SettingView> {
+  bool _isForceUpdated = false;
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: Column(
+          // mainAxisAlignment: MainAxisAlignment.center,
+          children: <Widget>[
+            ListTile(
+                title: const Text("Salmon Stats"),
+                subtitle: const Text("Docs"),
+                trailing: OutlinedButton(
+                  child: const Text("Open"),
+                  onPressed: () {
+                    launchUrl(
+                        Uri.parse("https://api-dev.splatnet2.com/documents"));
+                  },
+                )),
+            ListTile(
+                title: const Text("SplatNet2"),
+                subtitle: const Text("Login"),
+                trailing: OutlinedButton(
+                  child: const Text("Login"),
+                  onPressed: () {
+                    launchUrl(
+                        Uri.parse("https://api-dev.splatnet2.com/documents"));
+                  },
+                )),
+            const ListTile(
+              title: Text('Iksm Session'),
+              subtitle: Text("Meowing"),
+            ),
+            const ListTile(
+              title: Text('Session Token'),
+              subtitle: Text("Meowing"),
+            ),
+            const ListTile(
+              title: Text('Result ID'),
+              subtitle: Text("Meowing"),
+            ),
+            SwitchListTile(
+                value: _isForceUpdated,
+                onChanged: (bool newValue) {
+                  setState(() {
+                    _isForceUpdated = newValue;
+                  });
+                },
+                title: const Text("Force update")),
           ],
         ),
       ),
