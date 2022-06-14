@@ -7,6 +7,7 @@ import 'dart:developer';
 import 'iksm.dart';
 import 'response.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -49,6 +50,7 @@ class _TabViewState extends State<TabView> {
                 icon: Icon(Icons.home),
                 text: "Home",
               ),
+              // Tab(icon: Icon(Icons.snowing), text: "Salmon Stats"),
               Tab(icon: Icon(Icons.settings), text: "Settings"),
             ],
           ),
@@ -57,6 +59,7 @@ class _TabViewState extends State<TabView> {
         body: TabBarView(
           children: [
             HomeView(),
+            // SalmonStatsView(),
             SettingView(),
           ],
         ),
@@ -84,7 +87,20 @@ class SalmonStatsView extends StatefulWidget {
 
 class _SalmonStatsState extends State<SalmonStatsView> {
   @override
-  Widget build(BuildContext context) {}
+  void initState() {
+    super.initState();
+    if (Platform.isAndroid) {
+      WebView.platform = AndroidWebView();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+        body: WebView(
+      initialUrl: "https://salmonstats.netlify.app/",
+    ));
+  }
 }
 
 class SettingView extends StatefulWidget {
@@ -119,7 +135,7 @@ class _SettingViewState extends State<SettingView> {
                 trailing: OutlinedButton(
                   child: const Text("Login"),
                   onPressed: () {
-                    launchUrl(oauthURL);
+                    launchUrl(oauthURL, mode: LaunchMode.externalApplication);
                   },
                 )),
             const ListTile(
