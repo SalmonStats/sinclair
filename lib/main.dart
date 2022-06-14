@@ -1,16 +1,17 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:sinclair/splatnet2.dart';
+import 'package:sinclair/deeplink.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 import 'dart:developer';
-import 'iksm.dart';
-import 'response.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:webview_flutter/webview_flutter.dart';
-
-import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+// Sinclair
+import 'package:sinclair/iksm.dart';
+import 'package:sinclair/response.dart';
+import 'package:sinclair/splatnet2.dart';
+import 'package:sinclair/deeplink.dart';
 
 void main() {
   runApp(const MyApp());
@@ -34,10 +35,21 @@ class MyApp extends StatelessWidget {
 
 class TabView extends StatefulWidget {
   @override
-  _TabViewState createState() => _TabViewState();
+  State<TabView> createState() => _TabViewState();
 }
 
-class _TabViewState extends State<TabView> {
+class _TabViewState extends State<TabView> with DeepLinkNotificationMixin {
+  @override
+  void initState() {
+    super.initState();
+  }
+
+  @override
+  void onDeepLinkNotify(Uri? uri) {
+    debugPrint(uri.toString());
+    inspect(uri);
+  }
+
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
@@ -70,7 +82,7 @@ class _TabViewState extends State<TabView> {
 
 class HomeView extends StatefulWidget {
   @override
-  _HomeViewState createState() => _HomeViewState();
+  State<HomeView> createState() => _HomeViewState();
 }
 
 class _HomeViewState extends State<HomeView> {
@@ -80,32 +92,9 @@ class _HomeViewState extends State<HomeView> {
   }
 }
 
-class SalmonStatsView extends StatefulWidget {
-  @override
-  _SalmonStatsState createState() => _SalmonStatsState();
-}
-
-class _SalmonStatsState extends State<SalmonStatsView> {
-  @override
-  void initState() {
-    super.initState();
-    if (Platform.isAndroid) {
-      WebView.platform = AndroidWebView();
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return const Scaffold(
-        body: WebView(
-      initialUrl: "https://salmonstats.netlify.app/",
-    ));
-  }
-}
-
 class SettingView extends StatefulWidget {
   @override
-  _SettingViewState createState() => _SettingViewState();
+  State<SettingView> createState() => _SettingViewState();
 }
 
 class _SettingViewState extends State<SettingView> {
