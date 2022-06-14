@@ -11,5 +11,6 @@
     "editor.defaultFormatter": "Dart-Code.dart-code",
     "editor.formatOnPaste": true
   },
-  "cmake.configureOnOpen": true
+  "cmake.configureOnOpen": true,
+  "cSpell.words": ["Flapg", "splatoon"]
 }

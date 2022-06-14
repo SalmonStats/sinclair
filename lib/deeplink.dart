@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'dart:async';
 import 'package:uni_links/uni_links.dart';
 import 'package:flutter/material.dart';

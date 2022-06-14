@@ -1,17 +1,12 @@
-import 'dart:convert';
-import 'dart:io';
-import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:sinclair/deeplink.dart';
-import 'package:url_launcher/url_launcher_string.dart';
 import 'dart:developer';
+
+import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:http/http.dart' as http;
 // Sinclair
-import 'package:sinclair/iksm.dart';
-import 'package:sinclair/response.dart';
-import 'package:sinclair/splatnet2.dart';
+import 'package:sinclair/iksm/iksm.dart';
 import 'package:sinclair/deeplink.dart';
+import 'package:sinclair/iksm/user_info.dart';
+import 'package:url_launcher/url_launcher_string.dart';
 
 void main() {
   runApp(const MyApp());
@@ -38,18 +33,7 @@ class TabView extends StatefulWidget {
   State<TabView> createState() => _TabViewState();
 }
 
-class _TabViewState extends State<TabView> with DeepLinkNotificationMixin {
-  @override
-  void initState() {
-    super.initState();
-  }
-
-  @override
-  void onDeepLinkNotify(Uri? uri) {
-    debugPrint(uri.toString());
-    inspect(uri);
-  }
-
+class _TabViewState extends State<TabView> {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
@@ -62,7 +46,6 @@ class _TabViewState extends State<TabView> with DeepLinkNotificationMixin {
                 icon: Icon(Icons.home),
                 text: "Home",
               ),
-              // Tab(icon: Icon(Icons.snowing), text: "Salmon Stats"),
               Tab(icon: Icon(Icons.settings), text: "Settings"),
             ],
           ),
@@ -71,7 +54,6 @@ class _TabViewState extends State<TabView> with DeepLinkNotificationMixin {
         body: TabBarView(
           children: [
             HomeView(),
-            // SalmonStatsView(),
             SettingView(),
           ],
         ),
@@ -97,10 +79,42 @@ class SettingView extends StatefulWidget {
   State<SettingView> createState() => _SettingViewState();
 }
 
-class _SettingViewState extends State<SettingView> {
+class _SettingViewState extends State<SettingView>
+    with DeepLinkNotificationMixin {
+  final SplatNet2 session = SplatNet2();
+
+  @override
+  void initState() {
+    super.initState();
+  }
+
+  @override
+  void onDeepLinkNotify(Uri? uri) {
+    if (uri == null) {
+      return;
+    }
+
+    final RegExp regex = RegExp("de=(.*)&");
+    final RegExpMatch? match = regex.firstMatch(uri.toString());
+    final String? sessionTokenCode = match?.group(1);
+
+    if (sessionTokenCode == null) {
+      return;
+    }
+
+    session.getCookie(sessionTokenCode).then(
+      (userInfo) {
+        inspect(userInfo);
+        setState(() {
+          _userInfo = userInfo;
+        });
+      },
+    );
+  }
+
+  UserInfo? _userInfo = null;
   bool _isForceUpdated = false;
-  Uri oauthURL = Uri.parse(
-      "https://accounts.nintendo.com/connect/1.0.0/authorize?state=V6DSwHXbqC4rspCn_ArvfkpG1WFSvtNYrhugtfqOHsF6SYyX&redirect_uri=npf71b963c1b7b6d119://auth&client_id=71b963c1b7b6d119&scope=openid+user+user.birthday+user.mii+user.screenName&response_type=session_token_code&session_token_code_challenge=tYLPO5PxpK-DTcAHJXugD7ztvAZQlo0DQQp3au5ztuM&session_token_code_challenge_method=S256&theme=login_form");
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -123,17 +137,22 @@ class _SettingViewState extends State<SettingView> {
                 subtitle: const Text("Login"),
                 trailing: OutlinedButton(
                   child: const Text("Login"),
-                  onPressed: () {
-                    launchUrl(oauthURL, mode: LaunchMode.externalApplication);
+                  onPressed: () async {
+                    launchUrlString(SplatNet2.oauthURL,
+                        mode: LaunchMode.externalApplication);
                   },
                 )),
-            const ListTile(
-              title: Text('Iksm Session'),
-              subtitle: Text("Meowing"),
+            ListTile(
+              title: Text('Release Date'),
+              subtitle: Text(_userInfo?.currentVersionReleaseDate ?? "Unknown"),
             ),
-            const ListTile(
+            ListTile(
+              title: Text('Iksm Session'),
+              subtitle: Text(_userInfo?.iksmSession ?? "Unknown"),
+            ),
+            ListTile(
               title: Text('Session Token'),
-              subtitle: Text("Meowing"),
+              subtitle: Text(_userInfo?.sessionToken ?? "Unknown", maxLines: 1),
             ),
             const ListTile(
               title: Text('Result ID'),
@@ -147,6 +166,10 @@ class _SettingViewState extends State<SettingView> {
                   });
                 },
                 title: const Text("Force update")),
+            ListTile(
+              title: Text('Version'),
+              subtitle: Text(_userInfo?.version ?? "Unknown"),
+            ),
           ],
         ),
       ),
