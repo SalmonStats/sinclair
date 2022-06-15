@@ -82,10 +82,14 @@ class SettingView extends StatefulWidget {
 class _SettingViewState extends State<SettingView>
     with DeepLinkNotificationMixin {
   final SplatNet2 session = SplatNet2();
+  String? iksmSession;
 
   @override
   void initState() {
     super.initState();
+    setState(() {
+      iksmSession = session.iksmSession;
+    });
   }
 
   @override
@@ -102,17 +106,9 @@ class _SettingViewState extends State<SettingView>
       return;
     }
 
-    session.getCookie(sessionTokenCode).then(
-      (userInfo) {
-        inspect(userInfo);
-        setState(() {
-          _userInfo = userInfo;
-        });
-      },
-    );
+    session.getCookie(sessionTokenCode);
   }
 
-  UserInfo? _userInfo = null;
   bool _isForceUpdated = false;
 
   @override
@@ -144,19 +140,19 @@ class _SettingViewState extends State<SettingView>
                 )),
             ListTile(
               title: Text('Release Date'),
-              subtitle: Text(_userInfo?.currentVersionReleaseDate ?? "Unknown"),
+              subtitle: Text(session.currentVersionReleaseDate.toString()),
             ),
             ListTile(
               title: Text('Iksm Session'),
-              subtitle: Text(_userInfo?.iksmSession ?? "Unknown"),
+              subtitle: Text(iksmSession.toString()),
             ),
             ListTile(
               title: Text('Session Token'),
-              subtitle: Text(_userInfo?.sessionToken ?? "Unknown", maxLines: 1),
+              subtitle: Text(session.sessionToken.toString(), maxLines: 1),
             ),
-            const ListTile(
+            ListTile(
               title: Text('Result ID'),
-              subtitle: Text("Meowing"),
+              subtitle: Text(session.resultId.toString()),
             ),
             SwitchListTile(
                 value: _isForceUpdated,
@@ -168,7 +164,7 @@ class _SettingViewState extends State<SettingView>
                 title: const Text("Force update")),
             ListTile(
               title: Text('Version'),
-              subtitle: Text(_userInfo?.version ?? "Unknown"),
+              subtitle: Text(session.version.toString()),
             ),
           ],
         ),

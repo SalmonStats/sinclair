@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'dart:developer';
+import 'dart:ffi';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:sinclair/iksm/access_token.dart';
@@ -10,8 +12,35 @@ import 'package:sinclair/iksm/splatoon_access_token.dart';
 import 'package:sinclair/iksm/splatoon_token.dart';
 import 'package:sinclair/iksm/user_info.dart';
 import 'package:sinclair/iksm/version.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:sinclair/response.dart';
+
+Iterable<int> range(int low, int high) sync* {
+  for (int i = low; i < high; ++i) {
+    yield i;
+  }
+}
 
 class SplatNet2 {
+  final FlutterSecureStorage keychain = new FlutterSecureStorage();
+  String? iksmSession;
+  String? sessionToken;
+  String? currentVersionReleaseDate;
+  String? version;
+  int? resultId;
+
+  SplatNet2() {
+    keychain.readAll().then((value) {
+      final UserInfo userInfo = UserInfo.fromJson(value);
+      iksmSession = userInfo.iksmSession;
+      sessionToken = userInfo.sessionToken;
+      currentVersionReleaseDate = userInfo.currentVersionReleaseDate;
+      version = userInfo.version;
+      resultId = userInfo.resultId;
+      inspect(userInfo);
+    });
+  }
+
   Future<Version> _getVersion() async {
     http.Client client = http.Client();
     Uri url = Uri.parse("https://itunes.apple.com/lookup?id=1234806557");
@@ -219,27 +248,89 @@ class SplatNet2 {
     return iksmSession;
   }
 
-  Future<UserInfo> renewCookie(String sessionToken) async {
+  Future<void> _getCookie(String sessionToken) async {
     final Version product = await _getVersion();
-    return _getAccessToken(sessionToken)
-        .then((accessToken) =>
-            _getSplatoonTokenValue(accessToken, product.version))
-        .then((splatoonToken) =>
-            _getSplatoonAccessTokenValue(splatoonToken, product.version))
-        .then((splatoonAccessToken) => _getIksmSession(splatoonAccessToken))
-        .then((iksmSession) => UserInfo(
-            sessionToken: sessionToken,
-            iksmSession: iksmSession,
-            currentVersionReleaseDate: product.currentVersionReleaseDate,
-            version: product.version))
-        .catchError((error) {
+    final UserInfo userInfo = UserInfo(
+        iksmSession: null,
+        sessionToken: sessionToken,
+        currentVersionReleaseDate: product.currentVersionReleaseDate,
+        version: product.version,
+        resultId: null);
+    inspect(userInfo);
+    _getAccessToken(sessionToken).then((accessToken) {
+      inspect(sessionToken);
+      return _getSplatoonTokenValue(accessToken, product.version);
+    }).then((splatoonToken) {
+      inspect(splatoonToken);
+      return _getSplatoonAccessTokenValue(splatoonToken, product.version);
+    }).then((splatoonAccessToken) {
+      inspect(splatoonAccessToken);
+      return _getIksmSession(splatoonAccessToken);
+    }).then((iksmSession) {
+      inspect(iksmSession);
+      userInfo.iksmSession = iksmSession;
+      return _getSummary(iksmSession);
+    }).then((summary) {
+      inspect(summary);
+      userInfo.resultId = summary.summary.card.jobNum;
+    }).catchError((error) {
       throw error;
+    }).whenComplete(() {
+      userInfo.toJson().forEach((key, value) {
+        keychain.write(key: key, value: value.toString());
+      });
     });
   }
 
-  Future<UserInfo> getCookie(String sessionTokenCode) async {
+  Future<void> getCookie(String sessionTokenCode) async {
     final SessionToken sessionToken = await _getSessionToken(sessionTokenCode);
-    return renewCookie(sessionToken.sessionToken);
+    _getCookie(sessionToken.sessionToken);
+  }
+
+  Future<int> uploadResult(int resultId, String iksmSession) async {
+    final int resultId = (await _getSummary(iksmSession)).summary.card.jobNum;
+
+    final List<int> resultIds = range(resultId - 49, resultId).toList();
+    await Future.forEach(resultIds, (data) async {
+      final int resultId = data as int;
+      final http.Response result = await _getResult(resultId, iksmSession);
+      final http.Response uploadResult = await _uploadResult(result.body);
+      inspect(uploadResult);
+    });
+    return 0;
+  }
+
+  Future<http.Response> _getResult(int resultId, String iksmSession) async {
+    http.Client client = http.Client();
+    Map<String, String> headers = {
+      "cookie": "iksm_session=$iksmSession",
+    };
+    Uri url = Uri.parse(
+        "https://app.splatoon2.nintendo.net/api/coop_results/${resultId}");
+    return client.get(url, headers: headers);
+  }
+
+  Future<http.Response> _uploadResult(String result) {
+    http.Client client = http.Client();
+    Uri url = Uri.parse("https://api-dev.splatnet2.com/v1/results");
+    Map<String, List<Object>> parameters = {
+      "results": [json.decode(result)],
+    };
+
+    return client.post(url,
+        headers: {"content-type": "application/json"},
+        body: json.encode(parameters));
+  }
+
+  Future<Results> _getSummary(String iksmSession) async {
+    http.Client client = http.Client();
+    Map<String, String> headers = {
+      "cookie": "iksm_session=$iksmSession",
+    };
+    Uri url = Uri.parse("https://app.splatoon2.nintendo.net/api/coop_results");
+
+    final http.Response response = await client.get(url, headers: headers);
+    return Results.fromJson(json.decode(response.body));
   }
 
   static final String oauthURL = (() {
