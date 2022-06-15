@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:developer';
 import 'dart:ffi';
 import 'dart:io';
+import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:sinclair/iksm/access_token.dart';
 import 'package:sinclair/iksm/error.dart';
@@ -21,8 +22,16 @@ Iterable<int> range(int low, int high) sync* {
   }
 }
 
-class SplatNet2 {
+class SplatNet2 with ChangeNotifier {
   final FlutterSecureStorage keychain = new FlutterSecureStorage();
+  UserInfo? _userInfo;
+  UserInfo? get userInfo => _userInfo;
+  set userInfo(UserInfo? value) {
+    _userInfo = value;
+    debugPrint("Notification: Sender");
+    notifyListeners();
+  }
+
   String? iksmSession;
   String? sessionToken;
   String? currentVersionReleaseDate;
@@ -31,13 +40,12 @@ class SplatNet2 {
 
   SplatNet2() {
     keychain.readAll().then((value) {
-      final UserInfo userInfo = UserInfo.fromJson(value);
-      iksmSession = userInfo.iksmSession;
-      sessionToken = userInfo.sessionToken;
-      currentVersionReleaseDate = userInfo.currentVersionReleaseDate;
-      version = userInfo.version;
-      resultId = userInfo.resultId;
-      inspect(userInfo);
+      userInfo = UserInfo.fromJson(value);
+      iksmSession = userInfo?.iksmSession;
+      sessionToken = userInfo?.sessionToken;
+      currentVersionReleaseDate = userInfo?.currentVersionReleaseDate;
+      version = userInfo?.version;
+      resultId = userInfo?.resultId;
     });
   }
 
