@@ -3,6 +3,7 @@ class UserInfo {
   String? iksmSession;
   String? currentVersionReleaseDate;
   String? version;
+  String? expiresIn;
   int? resultId;
 
   UserInfo(
@@ -10,7 +11,8 @@ class UserInfo {
       required this.iksmSession,
       required this.currentVersionReleaseDate,
       required this.version,
-      required this.resultId});
+      required this.resultId,
+      required this.expiresIn});
 
   factory UserInfo.fromJson(Map<String, String> json) {
     return UserInfo(
@@ -18,6 +20,7 @@ class UserInfo {
         iksmSession: json["iksmSession"],
         currentVersionReleaseDate: json["currentVersionReleaseDate"],
         version: json["version"],
+        expiresIn: json["expiresIn"],
         resultId:
             json["resultId"] == null ? null : int.parse(json["resultId"]!));
   }
@@ -28,6 +31,7 @@ class UserInfo {
       "iksmSession": iksmSession,
       "currentVersionReleaseDate": currentVersionReleaseDate,
       "version": version,
+      "expiresIn": expiresIn,
       "resultId": resultId
     };
   }

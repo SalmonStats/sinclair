@@ -75,16 +75,16 @@ class _SettingViewState extends State<SettingView>
                   },
                 )),
             ListTile(
-              title: const Text('Release Date'),
-              subtitle: Text(session.currentVersionReleaseDate.toString()),
-            ),
-            ListTile(
               title: const Text('Iksm Session'),
               subtitle: Text(session.iksmSession.toString()),
             ),
             ListTile(
               title: const Text('Session Token'),
               subtitle: Text(session.sessionToken.toString(), maxLines: 1),
+            ),
+            ListTile(
+              title: const Text('Expires In'),
+              subtitle: Text(session.expiresIn.toString(), maxLines: 1),
             ),
             ListTile(
               title: const Text('Result ID'),
@@ -101,6 +101,10 @@ class _SettingViewState extends State<SettingView>
             ListTile(
               title: const Text('Version'),
               subtitle: Text(session.version.toString()),
+            ),
+            ListTile(
+              title: const Text('Release Date'),
+              subtitle: Text(session.currentVersionReleaseDate.toString()),
             ),
           ],
         ),

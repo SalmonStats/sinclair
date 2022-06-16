@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:developer';
-import 'dart:ffi';
 import 'dart:io';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:sinclair/iksm/access_token.dart';
@@ -24,28 +24,48 @@ Iterable<int> range(int low, int high) sync* {
 
 class SplatNet2 with ChangeNotifier {
   final FlutterSecureStorage keychain = new FlutterSecureStorage();
+
+  // 適当に作ったやつ
+  int resultCount = 0;
+  int resultNow = 0;
+
+  // GetterとかSetterとか
   UserInfo? _userInfo;
   UserInfo? get userInfo => _userInfo;
-  set userInfo(UserInfo? value) {
-    _userInfo = value;
-    debugPrint("Notification: Sender");
-    notifyListeners();
+  String? get iksmSession => _userInfo?.iksmSession;
+  String? get sessionToken => _userInfo?.sessionToken;
+  String? get currentVersionReleaseDate => _userInfo?.currentVersionReleaseDate;
+  String? get version => _userInfo?.version;
+  String? get expiresIn => _userInfo?.expiresIn;
+  int? get resultId => _userInfo?.resultId;
+
+  set expiresIn(String? newValue) {
+    inspect(newValue);
+    keychain.write(key: "expiresIn", value: newValue.toString());
   }
 
-  String? iksmSession;
-  String? sessionToken;
-  String? currentVersionReleaseDate;
-  String? version;
-  int? resultId;
+  set resultId(int? newValue) {
+    inspect(newValue);
+    keychain.write(key: "resultId", value: newValue.toString());
+  }
+
+  set userInfo(UserInfo? newValue) {
+    _userInfo = newValue;
+    debugPrint("Notification: UserInfo is updated.");
+    if (newValue == null) {
+      return;
+    }
+
+    // 値が更新されると通知する
+    newValue.toJson().forEach((key, value) {
+      keychain.write(key: key, value: value.toString());
+    });
+    notifyListeners();
+  }
 
   SplatNet2() {
     keychain.readAll().then((value) {
       userInfo = UserInfo.fromJson(value);
-      iksmSession = userInfo?.iksmSession;
-      sessionToken = userInfo?.sessionToken;
-      currentVersionReleaseDate = userInfo?.currentVersionReleaseDate;
-      version = userInfo?.version;
-      resultId = userInfo?.resultId;
     });
   }
 
@@ -263,6 +283,7 @@ class SplatNet2 with ChangeNotifier {
         sessionToken: sessionToken,
         currentVersionReleaseDate: product.currentVersionReleaseDate,
         version: product.version,
+        expiresIn: null,
         resultId: null);
     inspect(userInfo);
     _getAccessToken(sessionToken).then((accessToken) {
@@ -277,16 +298,20 @@ class SplatNet2 with ChangeNotifier {
     }).then((iksmSession) {
       inspect(iksmSession);
       userInfo.iksmSession = iksmSession;
-      return _getSummary(iksmSession);
+      return _getSummary();
     }).then((summary) {
       inspect(summary);
       userInfo.resultId = summary.summary.card.jobNum;
     }).catchError((error) {
       throw error;
     }).whenComplete(() {
+      userInfo.expiresIn =
+          DateTime.now().add(const Duration(days: 1)).toUtc().toIso8601String();
+      // データを書き込み
       userInfo.toJson().forEach((key, value) {
         keychain.write(key: key, value: value.toString());
       });
+      notifyListeners();
     });
   }
 
@@ -295,20 +320,49 @@ class SplatNet2 with ChangeNotifier {
     _getCookie(sessionToken.sessionToken);
   }
 
-  Future<int> uploadResult(int resultId, String iksmSession) async {
-    final int resultId = (await _getSummary(iksmSession)).summary.card.jobNum;
+  Future<void> uploadResult() async {
+    if (iksmSession == null) {
+      throw const HttpException("406: Unauthorized.");
+    }
 
-    final List<int> resultIds = range(resultId - 49, resultId).toList();
+    // 最新のリザルトIDを取得
+    final int latestResultId = (await _getSummary()).summary.card.jobNum;
+    // 保存しているリザルトIDを取得
+    final int localResultId =
+        [(userInfo?.resultId ?? 0), latestResultId - 49].maxValue;
+
+    if (latestResultId == localResultId) {
+      throw const HttpException("404: No new results.");
+    }
+
+    // 取得すべきリザルトの件数を保存
+    resultCount = latestResultId - localResultId;
+    resultNow = 0;
+    notifyListeners();
+
+    final List<int> resultIds = range(localResultId, latestResultId).toList();
     await Future.forEach(resultIds, (data) async {
       final int resultId = data as int;
-      final http.Response result = await _getResult(resultId, iksmSession);
+      final http.Response result = await _getResult(resultId);
       final http.Response uploadResult = await _uploadResult(result.body);
-      inspect(uploadResult);
+      // アップロード完了後に更新
+      resultNow += 1;
+      notifyListeners();
     });
-    return 0;
+    // 有効期限と最新のリザルトIDを更新
+    resultId = latestResultId;
+    expiresIn =
+        DateTime.now().add(const Duration(days: 1)).toUtc().toIso8601String();
+    notifyListeners();
   }
 
-  Future<http.Response> _getResult(int resultId, String iksmSession) async {
+  Future<http.Response> _getResult(int resultId) async {
+    final String? iksmSession = userInfo?.iksmSession;
+
+    if (iksmSession == null) {
+      throw const HttpException("406: Unauthorized.");
+    }
+
     http.Client client = http.Client();
     Map<String, String> headers = {
       "cookie": "iksm_session=$iksmSession",
@@ -318,7 +372,7 @@ class SplatNet2 with ChangeNotifier {
     return client.get(url, headers: headers);
   }
 
-  Future<http.Response> _uploadResult(String result) {
+  Future<http.Response> _uploadResult(String result) async {
     http.Client client = http.Client();
     Uri url = Uri.parse("https://api-dev.splatnet2.com/v1/results");
     Map<String, List<Object>> parameters = {
@@ -330,7 +384,13 @@ class SplatNet2 with ChangeNotifier {
         body: json.encode(parameters));
   }
 
-  Future<Results> _getSummary(String iksmSession) async {
+  Future<Results> _getSummary() async {
+    final String? iksmSession = userInfo?.iksmSession;
+
+    if (iksmSession == null) {
+      throw const HttpException("406: Unauthorized.");
+    }
+
     http.Client client = http.Client();
     Map<String, String> headers = {
       "cookie": "iksm_session=$iksmSession",
@@ -343,7 +403,6 @@ class SplatNet2 with ChangeNotifier {
 
   static final String oauthURL = (() {
     const String state = "V6DSwHXbqC4rspCn_ArvfkpG1WFSvtNYrhugtfqOHsF6SYyX";
-    const String verifier = "OwaTAOolhambwvY3RXSD-efxqdBEVNnQkc0bBJ7zaak";
     const String challenge = "tYLPO5PxpK-DTcAHJXugD7ztvAZQlo0DQQp3au5ztuM";
 
     final Map<String, String> parameters = {
@@ -364,4 +423,10 @@ class SplatNet2 with ChangeNotifier {
             queryParameters: parameters)
         .toString());
   })();
+}
+
+extension FancyIterable on Iterable<int> {
+  int get maxValue => reduce(max);
+
+  int get minValue => reduce(min);
 }
