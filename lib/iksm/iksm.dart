@@ -299,9 +299,6 @@ class SplatNet2 with ChangeNotifier {
       inspect(iksmSession);
       userInfo.iksmSession = iksmSession;
       return _getSummary();
-    }).then((summary) {
-      inspect(summary);
-      userInfo.resultId = summary.summary.card.jobNum;
     }).catchError((error) {
       throw error;
     }).whenComplete(() {
