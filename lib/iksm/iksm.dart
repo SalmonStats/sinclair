@@ -39,19 +39,35 @@ class SplatNet2 with ChangeNotifier {
   String? get expiresIn => _userInfo?.expiresIn;
   int? get resultId => _userInfo?.resultId;
 
+  set iksmSession(String? newValue) {
+    keychain.write(key: "iksmSession", value: newValue.toString());
+  }
+
+  set currentVersionReleaseDate(String? newValue) {
+    keychain.write(
+        key: "currentVersionReleaseDate", value: newValue.toString());
+  }
+
+  set version(String? newValue) {
+    keychain.write(key: "version", value: newValue.toString());
+  }
+
+  set sessionToken(String? newValue) {
+    keychain.write(key: "sessionToken", value: newValue.toString());
+  }
+
   set expiresIn(String? newValue) {
-    inspect(newValue);
     keychain.write(key: "expiresIn", value: newValue.toString());
   }
 
   set resultId(int? newValue) {
-    inspect(newValue);
-    keychain.write(key: "resultId", value: newValue.toString());
+    final String? resultId = newValue?.toString();
+    keychain.write(key: "resultId", value: resultId);
   }
 
   set userInfo(UserInfo? newValue) {
     _userInfo = newValue;
-    debugPrint("Notification: UserInfo is updated.");
+
     if (newValue == null) {
       return;
     }
@@ -277,37 +293,27 @@ class SplatNet2 with ChangeNotifier {
   }
 
   Future<void> _getCookie(String sessionToken) async {
+    this.sessionToken = sessionToken;
     final Version product = await _getVersion();
-    final UserInfo userInfo = UserInfo(
-        iksmSession: null,
-        sessionToken: sessionToken,
-        currentVersionReleaseDate: product.currentVersionReleaseDate,
-        version: product.version,
-        expiresIn: null,
-        resultId: null);
-    inspect(userInfo);
+    version = product.version;
+    currentVersionReleaseDate = product.currentVersionReleaseDate;
+
     _getAccessToken(sessionToken).then((accessToken) {
-      inspect(sessionToken);
       return _getSplatoonTokenValue(accessToken, product.version);
     }).then((splatoonToken) {
-      inspect(splatoonToken);
       return _getSplatoonAccessTokenValue(splatoonToken, product.version);
     }).then((splatoonAccessToken) {
-      inspect(splatoonAccessToken);
       return _getIksmSession(splatoonAccessToken);
     }).then((iksmSession) {
-      inspect(iksmSession);
-      userInfo.iksmSession = iksmSession;
-      return _getSummary();
+      this.iksmSession = iksmSession;
     }).catchError((error) {
       throw error;
-    }).whenComplete(() {
-      userInfo.expiresIn =
+    }).whenComplete(() async {
+      expiresIn =
           DateTime.now().add(const Duration(days: 1)).toUtc().toIso8601String();
-      // データを書き込み
-      userInfo.toJson().forEach((key, value) {
-        keychain.write(key: key, value: value.toString());
-      });
+      // データ読み込み
+      final Map<String, String> json = await keychain.readAll();
+      userInfo = UserInfo.fromJson(json);
       notifyListeners();
     });
   }
@@ -325,8 +331,7 @@ class SplatNet2 with ChangeNotifier {
     // 最新のリザルトIDを取得
     final int latestResultId = (await _getSummary()).summary.card.jobNum;
     // 保存しているリザルトIDを取得
-    final int localResultId =
-        [(userInfo?.resultId ?? 0), latestResultId - 49].maxValue;
+    final int localResultId = [(resultId ?? 0), latestResultId - 49].maxValue;
 
     if (latestResultId == localResultId) {
       throw const HttpException("404: No new results.");
@@ -350,6 +355,9 @@ class SplatNet2 with ChangeNotifier {
     resultId = latestResultId;
     expiresIn =
         DateTime.now().add(const Duration(days: 1)).toUtc().toIso8601String();
+    // データ読み込み
+    final Map<String, String> json = await keychain.readAll();
+    userInfo = UserInfo.fromJson(json);
     notifyListeners();
   }
 

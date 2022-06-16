@@ -16,16 +16,16 @@ class _SettingViewState extends State<SettingView>
     with DeepLinkNotificationMixin {
   final SplatNet2 session = SplatNet2();
   bool _isForceUpdated = false;
-  UserInfo? userInfo;
+  UserInfo? _userInfo;
 
   @override
   void initState() {
     super.initState();
     session.addListener(() {
-      debugPrint("Notification: Listener");
+      debugPrint("Notification: UserInfo is updated.");
       inspect(session);
       setState(() {
-        userInfo = session.userInfo;
+        _userInfo = session.userInfo;
       });
     });
   }
