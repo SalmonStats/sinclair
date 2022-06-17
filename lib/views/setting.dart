@@ -56,12 +56,16 @@ class _SettingViewState extends State<SettingView>
           children: <Widget>[
             ListTile(
                 title: const Text("Salmon Stats"),
-                subtitle: const Text("Docs"),
+                subtitle: const Text("Home"),
                 trailing: OutlinedButton(
                   child: const Text("Open"),
                   onPressed: () {
-                    launchUrl(
-                        Uri.parse("https://api-dev.splatnet2.com/documents"));
+                    if (session.nsaid == null) {
+                      launchUrl(Uri.parse("https://salmonstats.netlify.app/"));
+                    } else {
+                      launchUrl(Uri.parse(
+                          "https://salmonstats.netlify.app/users/${session.nsaid}"));
+                    }
                   },
                 )),
             ListTile(
@@ -74,6 +78,10 @@ class _SettingViewState extends State<SettingView>
                         mode: LaunchMode.externalApplication);
                   },
                 )),
+            ListTile(
+              title: const Text('Player ID'),
+              subtitle: Text(session.nsaid.toString()),
+            ),
             ListTile(
               title: const Text('Iksm Session'),
               subtitle: Text(session.iksmSession.toString()),

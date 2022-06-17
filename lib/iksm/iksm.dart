@@ -32,6 +32,7 @@ class SplatNet2 with ChangeNotifier {
   // GetterとかSetterとか
   UserInfo? _userInfo;
   UserInfo? get userInfo => _userInfo;
+  String? get nsaid => _userInfo?.nsaid;
   String? get iksmSession => _userInfo?.iksmSession;
   String? get sessionToken => _userInfo?.sessionToken;
   String? get currentVersionReleaseDate => _userInfo?.currentVersionReleaseDate;
@@ -46,6 +47,11 @@ class SplatNet2 with ChangeNotifier {
   set currentVersionReleaseDate(String? newValue) {
     keychain.write(
         key: "currentVersionReleaseDate", value: newValue.toString());
+  }
+
+  set nsaid(String? newValue) {
+    final String? nsaid = newValue?.toString();
+    keychain.write(key: "nsaid", value: nsaid);
   }
 
   set version(String? newValue) {
@@ -265,7 +271,7 @@ class SplatNet2 with ChangeNotifier {
     }
   }
 
-  Future<String> _getIksmSession(SplatoonAccessToken token) async {
+  Future<UserData> _getIksmSession(SplatoonAccessToken token) async {
     http.Client client = http.Client();
     final String accessToken = token.result.accessToken;
     final Uri url = Uri.parse("https://app.splatoon2.nintendo.net/");
@@ -275,10 +281,13 @@ class SplatNet2 with ChangeNotifier {
       "X-GameWebToken": accessToken
     };
 
-    final String? cookies =
-        (await client.get(url, headers: headers)).headers["set-cookie"];
+    final http.Response response = (await client.get(url, headers: headers));
+    final String? cookies = response.headers["set-cookie"];
+    final String? nsaid = RegExp(r"data-nsa-id=([A-z0-9]{16})")
+        .firstMatch(response.body.toString())
+        ?.group(1);
 
-    if (cookies == null) {
+    if (cookies == null || nsaid == null) {
       throw const HttpException("403: Forbidden.");
     }
 
@@ -289,7 +298,7 @@ class SplatNet2 with ChangeNotifier {
       throw const HttpException("403: Forbidden.");
     }
 
-    return iksmSession;
+    return UserData(iksmSession: iksmSession, nsaid: nsaid);
   }
 
   Future<void> _getCookie(String sessionToken) async {
@@ -304,8 +313,9 @@ class SplatNet2 with ChangeNotifier {
       return _getSplatoonAccessTokenValue(splatoonToken, product.version);
     }).then((splatoonAccessToken) {
       return _getIksmSession(splatoonAccessToken);
-    }).then((iksmSession) {
-      this.iksmSession = iksmSession;
+    }).then((user) {
+      this.iksmSession = user.iksmSession;
+      this.nsaid = user.nsaid;
     }).catchError((error) {
       throw error;
     }).whenComplete(() async {
@@ -334,6 +344,12 @@ class SplatNet2 with ChangeNotifier {
     final int localResultId = [(resultId ?? 0), latestResultId - 49].maxValue;
 
     if (latestResultId == localResultId) {
+      expiresIn =
+          DateTime.now().add(const Duration(days: 1)).toUtc().toIso8601String();
+      // データ読み込み
+      final Map<String, String> json = await keychain.readAll();
+      userInfo = UserInfo.fromJson(json);
+      notifyListeners();
       throw const HttpException("404: No new results.");
     }
 
