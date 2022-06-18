@@ -17,7 +17,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:sinclair/response.dart';
 
 Iterable<int> range(int low, int high) sync* {
-  for (int i = low; i < high; ++i) {
+  for (int i = low; i <= high; ++i) {
     yield i;
   }
 }
