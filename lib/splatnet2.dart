@@ -36,7 +36,7 @@ Future<http.Response> _get(int resultId) async {
 
 Future<http.Response> _upload(String result) {
   http.Client client = http.Client();
-  Uri url = Uri.parse("https://api-dev.splatnet2.com/v1/results");
+  Uri url = Uri.parse("https://api.splatnet2.com/v1/results");
   Map<String, List<Object>> parameters = {
     "results": [json.decode(result)],
   };
