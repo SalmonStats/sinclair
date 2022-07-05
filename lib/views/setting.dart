@@ -60,12 +60,7 @@ class _SettingViewState extends State<SettingView>
                 trailing: OutlinedButton(
                   child: const Text("Open"),
                   onPressed: () {
-                    if (session.nsaid == null) {
-                      launchUrl(Uri.parse("https://salmonstats.netlify.app/"));
-                    } else {
-                      launchUrl(Uri.parse(
-                          "https://salmonstats.netlify.app/users/${session.nsaid}"));
-                    }
+                    launchUrl(Uri.parse("https://salmonstats.splatnet2.com"));
                   },
                 )),
             ListTile(

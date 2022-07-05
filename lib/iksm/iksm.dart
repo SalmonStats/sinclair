@@ -354,7 +354,7 @@ class SplatNet2 with ChangeNotifier {
     }
 
     // 取得すべきリザルトの件数を保存
-    resultCount = latestResultId - localResultId;
+    resultCount = latestResultId - localResultId + 1;
     resultNow = 0;
     notifyListeners();
 
@@ -395,7 +395,7 @@ class SplatNet2 with ChangeNotifier {
 
   Future<http.Response> _uploadResult(String result) async {
     http.Client client = http.Client();
-    Uri url = Uri.parse("https://api-dev.splatnet2.com/v1/results");
+    Uri url = Uri.parse("https://api.splatnet2.com/v1/results");
     Map<String, List<Object>> parameters = {
       "results": [json.decode(result)],
     };
